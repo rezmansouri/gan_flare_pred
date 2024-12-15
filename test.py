@@ -4,13 +4,18 @@ import torch
 import numpy as np
 import pandas as pd
 from tqdm import trange
-from gan_flare_pred.util import hss, tss, conf_mat
-from gan_flare_pred.discriminator_gan import Discriminator
+from util import hss, tss, conf_mat
+from discriminator_gan import Discriminator
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+def load_data_v2_from_npy(x_path, label_path):
+    x = np.load(x_path)
+    y = np.load(label_path)
+    return x, y
 
-def load_data_from_npy(x_path, label_path):
+
+def load_data_v1_from_npy(x_path, label_path):
     x = np.load(x_path)
     label_string = list(np.load(label_path))
 
@@ -56,20 +61,25 @@ def load_data_from_csv(partition_path):
 
 
 def main():
-    partition = sys.argv[1]
+    partition, is_normalized = sys.argv[1], sys.argv[2]
     
     model = Discriminator(hidden_dim=64, seq_len=60, n_feat=4).to(device)
     model.load_state_dict(
-        torch.load("discriminator_epoch-80.pth", map_location=device, weights_only=True)
+        torch.load("./../discriminator_epoch-80.pth", map_location=device, weights_only=True)
     )
 
     batch_size = 64
 
-    min_max = get_reference_min_max("p1_x_raw.npy", "p1_label.npy")
-    x, y = load_data_from_npy(f"p{partition}_x_raw.npy", f"p{partition}_label.npy")
-    for i in range(4):
-        min_, max_ = min_max[i]
-        x[:, :, i] = (x[:, :, i] - min_) / (max_ - min_)
+    if not bool(is_normalized):
+        print('Normalizing the data')
+        min_max = get_reference_min_max("./../p1_x_raw.npy", "./../p1_label.npy")
+        x, y = load_data_v1_from_npy(f"./../p{partition}_x_raw.npy", f"./../p{partition}_label.npy")
+        for i in range(4):
+            min_, max_ = min_max[i]
+            x[:, :, i] = (x[:, :, i] - min_) / (max_ - min_)
+    else:
+        print('Data is already normalized')
+        x, y = load_data_v2_from_npy(f"./../normalized/p{partition}_x.npy", f"./../normalized/p{partition}_y.npy")
 
     x = torch.tensor(x, dtype=torch.float32).to(device)
 
